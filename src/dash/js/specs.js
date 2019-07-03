@@ -25,9 +25,10 @@ const SPECS = firebase.firestore().collection("specs");
 
 const specsListEl = select("#specs-list");
 const saveSpecBtn = select(`[data-action='save-spec']`);
+const cloneSpecBtn = select('[data-action=clone-spec]');
 const specNameField = select("#specname-field");
 const specAboutField = select("#specabout-field");
-const specDifficultyField = select("#specdifficulty-field")
+const specDifficultyField = select("#specdifficulty-field");
 const challengeListEl = select("#challenge-list");
 
 const switchDetailsTo = attr => {
@@ -58,8 +59,7 @@ const selectAChallenge = event => {
   select('#toggle-viewer').classList.remove('mdc-icon-button--on');
 };
 
-const challengeListItemTPL = challenges => {
-  return html`
+const challengeListItemTPL = challenges => html`
     ${
       challenges.map(
         (item, index) => html`
@@ -80,7 +80,6 @@ const challengeListItemTPL = challenges => {
       )
     }
   `;
-};
 
 const extriesAreValid = () =>
   spec &&
@@ -117,6 +116,8 @@ const clearInputValues = () => {
     const field = input;
     field.value = "";
   });
+
+  cloneSpecBtn.style.display = 'none';
 };
 
 const saveSpec = details => {
@@ -138,6 +139,31 @@ const saveSpec = details => {
     .then(ref => SPECS.doc(ref.id))
     .then(doc => doc.get());
 };
+
+const cloneASpec = async () => {
+  const { id, name, ...clonedSpec } = spec;
+  const clonedSpecName = `${name} Copy`;
+
+  // TODO: check if slug is unique in the backend
+
+  if (extriesAreValid(clonedSpec)) {
+    const doc = await saveSpec({
+      ...clonedSpec,
+      name: clonedSpecName,
+      slug: toSlug(clonedSpecName)
+    });
+    spec = {
+      id: doc.id,
+      ...doc.data()
+    };
+
+    const nameInput = specNameField.querySelector("input");
+    nameInput.value = clonedSpecName;
+    nameInput.focus();
+
+    goTo("create-edit-spec", { id: doc.id });
+  }
+}
 
 const specNameChanged = event => {
   spec.name = event.target.value;
@@ -233,7 +259,7 @@ const togglePreviewEditModes = (event) => {
   select('#toggle-viewer').classList.toggle('mdc-icon-button--on');
 };
 
-const buildUI = mode => {
+const buildUI = ({ mode }) => {
   if (builtUI === true) return;
 
   const viewTitle = select(`[data-view='create-edit-spec'] [data-view-title]`);
@@ -277,6 +303,7 @@ const buildUI = mode => {
     );
 
     select('#toggle-viewer').addEventListener('click', togglePreviewEditModes);
+    cloneSpecBtn.addEventListener('click', cloneASpec);
   });
 
   saveSpecBtn.addEventListener("click", () => {
@@ -285,6 +312,7 @@ const buildUI = mode => {
         id: updated.id,
         ...updated.data()
       };
+      cloneSpecBtn.style.display = 'block';
     });
   });
 
@@ -379,14 +407,15 @@ const manageASpec = event => {
     });
 
   buildUI({ mode: "manage" });
+  
+  cloneSpecBtn.style.display = 'block'
 
   select(`[data-view='create-edit-spec'] [data-view-title]`).textContent =
     "Manage A Spec";
   goTo("create-edit-spec", { id });
 };
 
-const specsListItemTPL = specs => {
-  return html`
+const specsListItemTPL = specs => html`
     ${
       specs.map(
         item => html`
@@ -406,7 +435,6 @@ const specsListItemTPL = specs => {
       )
     }
   `;
-};
 
 export const adminWillViewSpecs = () => {
   SPECS.where("status", "==", "active")
